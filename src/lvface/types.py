@@ -30,6 +30,7 @@ class Embedding:
     normalized: bool = False
 
     def __post_init__(self) -> None:
+        """Validate, copy, and freeze the embedding vector."""
         vector = np.array(self.vector, dtype=np.float32, order="C", copy=True)
 
         if vector.ndim != 1 or vector.size == 0:
@@ -47,7 +48,11 @@ class Embedding:
         object.__setattr__(self, "vector", vector)
 
     def normalize(self) -> "Embedding":
-        """Return an L2-normalized embedding."""
+        """Return an L2-normalized embedding.
+
+        Returns:
+            This embedding if already normalized, otherwise a normalized copy.
+        """
         if self.normalized:
             return self
 
@@ -62,7 +67,15 @@ class Embedding:
         dtype: np.dtype[Any] | type[Any] | None = None,
         copy: bool | None = None,
     ) -> np.ndarray[Any, np.dtype[Any]]:
-        """Return the embedding as a NumPy array."""
+        """Return the embedding as a NumPy array.
+
+        Args:
+            dtype: Optional output data type.
+            copy: Whether NumPy must copy the underlying vector.
+
+        Returns:
+            A NumPy representation of the embedding.
+        """
         return np.array(self.vector, dtype=dtype, copy=copy)
 
 
@@ -78,6 +91,7 @@ class Face:
     face_index: int = 0
 
     def __post_init__(self) -> None:
+        """Copy mutable landmark and aligned-image arrays."""
         if self.kps is not None:
             self.kps = np.array(self.kps, copy=True)
 
@@ -108,6 +122,7 @@ class Match:
 
 
 def _default_match_threshold() -> float:
+    """Return the default cosine threshold for match results."""
     from lvface.metrics import DEFAULT_THRESHOLDS
 
     return DEFAULT_THRESHOLDS["cosine"]
@@ -124,6 +139,7 @@ class MatchResult:
     threshold: float = field(default_factory=_default_match_threshold)
 
     def __post_init__(self) -> None:
+        """Validate and freeze the similarity matrix and result lists."""
         matrix = np.array(self.matrix, dtype=np.float64, order="C", copy=True)
         expected_shape = (len(self.query_faces), len(self.candidate_faces))
 
@@ -143,7 +159,14 @@ class MatchResult:
         object.__setattr__(self, "pairs", list(self.pairs))
 
     def best_for(self, query_index: int) -> Match | None:
-        """Return the highest-scoring selected match for one query face."""
+        """Return the highest-scoring selected match for one query face.
+
+        Args:
+            query_index: Position of the query face in ``query_faces``.
+
+        Returns:
+            The best selected match, or ``None`` when no pair was selected.
+        """
         if not 0 <= query_index < len(self.query_faces):
             raise IndexError(f"query index out of range: {query_index}")
 
@@ -155,7 +178,11 @@ class MatchResult:
         )
 
     def as_percentage_matrix(self) -> np.ndarray[Any, np.dtype[np.float64]]:
-        """Convert the similarity matrix to threshold-anchored display percentages."""
+        """Convert similarities to threshold-anchored display percentages.
+
+        Returns:
+            A percentage matrix with the same shape as ``matrix``.
+        """
         from lvface.metrics import to_percentage
 
         percentages = np.fromiter(

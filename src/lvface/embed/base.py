@@ -22,10 +22,24 @@ class FaceEmbedder(ABC):
 
     @abstractmethod
     def _forward(self, batch: npt.NDArray[np.float32]) -> npt.NDArray[np.floating]:
-        """Run a normalized NCHW batch and return raw embeddings."""
+        """Run inference for a normalized NCHW batch.
+
+        Args:
+            batch: Preprocessed float32 images with shape ``(N, C, H, W)``.
+
+        Returns:
+            Raw embedding vectors with shape ``(N, embedding_dim)``.
+        """
 
     def preprocess(self, crop: np.ndarray) -> npt.NDArray[np.float32]:
-        """Convert an aligned RGB uint8 crop to a normalized CHW tensor."""
+        """Convert an aligned RGB crop to a normalized CHW tensor.
+
+        Args:
+            crop: RGB uint8 crop matching ``input_size``.
+
+        Returns:
+            A contiguous normalized float32 CHW tensor.
+        """
         expected_shape = (*self.input_size, 3)
         if not isinstance(crop, np.ndarray):
             raise TypeError("crop must be a NumPy array")
@@ -41,7 +55,15 @@ class FaceEmbedder(ABC):
         return np.ascontiguousarray(normalized, dtype=np.float32)
 
     def embed(self, crop: np.ndarray, *, normalize: bool = True) -> Embedding:
-        """Embed one aligned RGB crop."""
+        """Embed one aligned RGB crop.
+
+        Args:
+            crop: RGB uint8 crop matching ``input_size``.
+            normalize: Whether to L2-normalize the embedding.
+
+        Returns:
+            The generated face embedding.
+        """
         return self.embed_batch([crop], normalize=normalize, batch_size=1)[0]
 
     def embed_batch(
@@ -51,7 +73,16 @@ class FaceEmbedder(ABC):
         normalize: bool = True,
         batch_size: int = 32,
     ) -> list[Embedding]:
-        """Embed aligned RGB crops, respecting the backend's batch contract."""
+        """Embed aligned crops while respecting the backend batch contract.
+
+        Args:
+            crops: Aligned RGB uint8 crops.
+            normalize: Whether to L2-normalize each embedding.
+            batch_size: Maximum batch size for dynamic-batch backends.
+
+        Returns:
+            Embeddings in the same order as ``crops``.
+        """
         if batch_size <= 0:
             raise ValueError("batch_size must be greater than zero")
 

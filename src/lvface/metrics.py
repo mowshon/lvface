@@ -43,6 +43,15 @@ def _vectors(
     a: VectorLike,
     b: VectorLike,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Validate and convert two vector-like inputs.
+
+    Args:
+        a: First one-dimensional vector.
+        b: Second one-dimensional vector.
+
+    Returns:
+        Two matching finite float64 vectors.
+    """
     left = np.asarray(a, dtype=np.float64)
     right = np.asarray(b, dtype=np.float64)
 
@@ -65,6 +74,15 @@ def _matrices(
     a: MatrixLike,
     b: MatrixLike,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Validate and convert two matrix-like inputs.
+
+    Args:
+        a: Matrix whose rows are feature vectors.
+        b: Matrix whose rows are feature vectors.
+
+    Returns:
+        Two finite float64 matrices with matching feature dimensions.
+    """
     left = np.asarray(a, dtype=np.float64)
     right = np.asarray(b, dtype=np.float64)
 
@@ -86,6 +104,14 @@ def _matrices(
 
 
 def _unit_vector(vector: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """L2-normalize a finite, nonzero vector.
+
+    Args:
+        vector: Vector to normalize.
+
+    Returns:
+        The normalized vector.
+    """
     norm = float(np.linalg.norm(vector))
     if not np.isfinite(norm) or norm == 0.0:
         raise ValueError("cannot normalize a vector with zero or non-finite norm")
@@ -94,6 +120,14 @@ def _unit_vector(vector: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 
 
 def _unit_rows(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """L2-normalize every row of a matrix.
+
+    Args:
+        matrix: Matrix containing one vector per row.
+
+    Returns:
+        A float64 matrix with unit-length rows.
+    """
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     if not np.isfinite(norms).all() or np.any(norms == 0.0):
         raise ValueError("cannot normalize rows with zero or non-finite norm")
@@ -102,31 +136,71 @@ def _unit_rows(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 
 
 def cosine(a: VectorLike, b: VectorLike) -> float:
-    """Return cosine similarity for two one-dimensional vectors."""
+    """Return cosine similarity for two vectors.
+
+    Args:
+        a: First vector.
+        b: Second vector.
+
+    Returns:
+        Cosine similarity in the range [-1, 1].
+    """
     left, right = _vectors(a, b)
     return float(np.clip(np.dot(_unit_vector(left), _unit_vector(right)), -1.0, 1.0))
 
 
 def euclidean(a: VectorLike, b: VectorLike) -> float:
-    """Return Euclidean distance for two one-dimensional vectors."""
+    """Return Euclidean distance for two vectors.
+
+    Args:
+        a: First vector.
+        b: Second vector.
+
+    Returns:
+        Euclidean distance between the vectors.
+    """
     left, right = _vectors(a, b)
     return float(np.linalg.norm(left - right))
 
 
 def euclidean_normalized(a: VectorLike, b: VectorLike) -> float:
-    """Return Euclidean distance after independently L2-normalizing both vectors."""
+    """Return distance after independently L2-normalizing both vectors.
+
+    Args:
+        a: First vector.
+        b: Second vector.
+
+    Returns:
+        Euclidean distance between the normalized vectors.
+    """
     left, right = _vectors(a, b)
     return float(np.linalg.norm(_unit_vector(left) - _unit_vector(right)))
 
 
 def dot(a: VectorLike, b: VectorLike) -> float:
-    """Return the inner product of two one-dimensional vectors."""
+    """Return the inner product of two vectors.
+
+    Args:
+        a: First vector.
+        b: Second vector.
+
+    Returns:
+        Dot product of the vectors.
+    """
     left, right = _vectors(a, b)
     return float(np.dot(left, right))
 
 
 def pairwise_cosine(a: MatrixLike, b: MatrixLike) -> npt.NDArray[np.float64]:
-    """Return an ``(N, M)`` matrix of cosine similarities."""
+    """Compute cosine similarity between every pair of rows.
+
+    Args:
+        a: Matrix containing N feature vectors.
+        b: Matrix containing M feature vectors.
+
+    Returns:
+        An ``(N, M)`` cosine-similarity matrix.
+    """
     left, right = _matrices(a, b)
     return np.clip(_unit_rows(left) @ _unit_rows(right).T, -1.0, 1.0)
 
@@ -136,7 +210,16 @@ def pairwise_distance(
     b: MatrixLike,
     metric: DistanceMetric = "euclidean",
 ) -> npt.NDArray[np.float64]:
-    """Return an ``(N, M)`` matrix for a genuine distance metric."""
+    """Compute distance between every pair of rows.
+
+    Args:
+        a: Matrix containing N feature vectors.
+        b: Matrix containing M feature vectors.
+        metric: Distance metric to apply.
+
+    Returns:
+        An ``(N, M)`` distance matrix.
+    """
     left, right = _matrices(a, b)
     if metric == "euclidean_normalized":
         left = _unit_rows(left)
@@ -164,6 +247,15 @@ def to_percentage(
 
     The default sigmoid is centered at the cosine decision threshold. The linear
     method maps the full cosine range directly onto 0 through 100.
+
+    Args:
+        score: Cosine similarity to convert.
+        threshold: Similarity mapped to 50 by the sigmoid method.
+        sharpness: Steepness of the sigmoid curve.
+        method: Conversion method, either ``"sigmoid"`` or ``"linear"``.
+
+    Returns:
+        A display percentage in the range [0, 100].
     """
     if not np.isfinite(score):
         raise ValueError("score must be finite")

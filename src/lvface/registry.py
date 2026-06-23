@@ -58,7 +58,7 @@ DEFAULT_MODEL = "LVFace-T_Glint360K"
 
 
 def default_cache_dir() -> Path:
-    """Return the package-owned model cache directory."""
+    """Return the configured or default model cache directory."""
     configured = os.environ.get("LVFACE_CACHE")
     if configured:
         return Path(configured).expanduser()
@@ -67,7 +67,15 @@ def default_cache_dir() -> Path:
 
 
 def model_cache_path(name: str, *, cache_dir: str | Path | None = None) -> Path:
-    """Return the expected package-cache path for a registered model."""
+    """Return the cache path for a registered model.
+
+    Args:
+        name: Registered model name.
+        cache_dir: Optional cache root override.
+
+    Returns:
+        Expected path to the model file.
+    """
     try:
         model = MODELS[name]
     except KeyError as error:
@@ -85,6 +93,16 @@ def _validation_key(
     stat: os.stat_result,
     model: Model,
 ) -> tuple[str, int, int, int, int, int, str]:
+    """Build a cache key from file identity and model metadata.
+
+    Args:
+        path: Resolved model path.
+        stat: Current file metadata.
+        model: Expected model metadata.
+
+    Returns:
+        A key that changes when the file or expected digest changes.
+    """
     return (
         str(path),
         stat.st_dev,
@@ -97,7 +115,15 @@ def _validation_key(
 
 
 def validate_model_file(path: str | Path, model: Model) -> Path:
-    """Validate a model file's size and SHA-256 digest."""
+    """Validate a model file's size and SHA-256 digest.
+
+    Args:
+        path: Model file to validate.
+        model: Expected model metadata.
+
+    Returns:
+        The resolved validated path.
+    """
     resolved = Path(path).expanduser().resolve()
     if not resolved.is_file():
         raise FileNotFoundError(f"model file not found: {resolved}")
@@ -146,7 +172,15 @@ def resolve_model_path(
     *,
     cache_dir: str | Path | None = None,
 ) -> Path:
-    """Resolve an explicit ONNX path or a registered model in the local cache."""
+    """Resolve an explicit ONNX path or a locally cached model.
+
+    Args:
+        model: Explicit file path or registered model name.
+        cache_dir: Optional cache root override.
+
+    Returns:
+        Resolved path to a valid model file.
+    """
     candidate = Path(model).expanduser()
     if candidate.is_file():
         return candidate.resolve()

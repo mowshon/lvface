@@ -23,6 +23,7 @@ _license_warning_emitted = False
 
 
 def _warn_about_model_license() -> None:
+    """Emit the InsightFace model-license warning once per process."""
     global _license_warning_emitted
     if _license_warning_emitted:
         return
@@ -34,6 +35,11 @@ def _warn_about_model_license() -> None:
 
 
 def _import_insightface() -> tuple[type[Any], Any]:
+    """Import optional InsightFace detection components.
+
+    Returns:
+        The ``FaceAnalysis`` class and face-alignment module.
+    """
     try:
         from insightface.app import FaceAnalysis
         from insightface.utils import face_align
@@ -57,6 +63,14 @@ class InsightFaceDetector(FaceDetector):
         det_size: tuple[int, int] = (640, 640),
         min_score: float = 0.5,
     ) -> None:
+        """Configure the InsightFace detector.
+
+        Args:
+            name: InsightFace model-pack name.
+            device: Preferred inference device.
+            det_size: Detection input width and height.
+            min_score: Minimum confidence retained as a face.
+        """
         if not name:
             raise ValueError("name must not be empty")
 
@@ -100,7 +114,14 @@ class InsightFaceDetector(FaceDetector):
             self.app = app
 
     def detect(self, image: np.ndarray) -> list[Face]:
-        """Detect faces in an RGB image, converting to BGR only for InsightFace."""
+        """Detect faces with InsightFace.
+
+        Args:
+            image: Source RGB uint8 image.
+
+        Returns:
+            Faces meeting the configured confidence threshold.
+        """
         source = _validate_image(image)
         self.load()
         if self.app is None:
@@ -143,7 +164,16 @@ class InsightFaceDetector(FaceDetector):
         return faces
 
     def align(self, image: np.ndarray, kps: np.ndarray, size: int = 112) -> np.ndarray:
-        """Align an RGB image with InsightFace's reference OpenCV warp."""
+        """Align an RGB image with InsightFace's reference warp.
+
+        Args:
+            image: Source RGB uint8 image.
+            kps: Five facial landmarks with shape ``(5, 2)``.
+            size: Output crop size.
+
+        Returns:
+            An aligned RGB uint8 crop.
+        """
         source = _validate_image(image)
         estimate_norm(kps, size)
         self.load()

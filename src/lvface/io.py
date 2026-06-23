@@ -26,6 +26,14 @@ ImageInput: TypeAlias = str | bytes | os.PathLike[str] | np.ndarray[Any, np.dtyp
 def _validate_array(
     image: np.ndarray[Any, np.dtype[Any]],
 ) -> npt.NDArray[np.uint8]:
+    """Validate and copy an image array as RGB uint8.
+
+    Args:
+        image: Grayscale, RGB, or RGBA uint8 image array.
+
+    Returns:
+        An owned contiguous RGB uint8 array.
+    """
     if image.dtype != np.uint8:
         raise ValueError(f"image array must have dtype uint8, got {image.dtype}")
 
@@ -48,6 +56,14 @@ def _validate_array(
 
 
 def _decode_image(source: BinaryIO) -> npt.NDArray[np.uint8]:
+    """Decode a binary image stream as RGB uint8.
+
+    Args:
+        source: Readable binary stream containing encoded image data.
+
+    Returns:
+        An owned RGB uint8 image.
+    """
     try:
         with Image.open(source) as image:
             width, height = image.size
@@ -65,6 +81,11 @@ def _decode_image(source: BinaryIO) -> npt.NDArray[np.uint8]:
 
 
 def _validate_url(url: str) -> None:
+    """Reject malformed URLs and hosts resolving to non-public addresses.
+
+    Args:
+        url: HTTP or HTTPS image URL.
+    """
     parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("image URL must use http or https")
@@ -88,6 +109,14 @@ def _validate_url(url: str) -> None:
 
 
 def _validate_connected_socket(sock: Any) -> Any:
+    """Ensure a connected socket reached a public IP address.
+
+    Args:
+        sock: Connected socket-like object.
+
+    Returns:
+        The original socket when its peer address is public.
+    """
     ip = ipaddress.ip_address(sock.getpeername()[0])
     if ip.is_global:
         return sock
@@ -96,16 +125,26 @@ def _validate_connected_socket(sock: Any) -> Any:
 
 
 def _public_address_adapter(requests: Any) -> Any:
+    """Build a requests adapter that rejects private peer addresses.
+
+    Args:
+        requests: Imported ``requests`` module.
+
+    Returns:
+        A configured HTTP adapter instance.
+    """
     from urllib3 import PoolManager
     from urllib3.connection import HTTPConnection, HTTPSConnection
     from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 
     class PublicHTTPConnection(HTTPConnection):
         def _new_conn(self) -> Any:
+            """Open and validate a public HTTP connection."""
             return _validate_connected_socket(super()._new_conn())
 
     class PublicHTTPSConnection(HTTPSConnection):
         def _new_conn(self) -> Any:
+            """Open and validate a public HTTPS connection."""
             return _validate_connected_socket(super()._new_conn())
 
     class PublicHTTPConnectionPool(HTTPConnectionPool):
@@ -116,6 +155,12 @@ def _public_address_adapter(requests: Any) -> Any:
 
     class PublicPoolManager(PoolManager):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
+            """Initialize pools using public-address connection classes.
+
+            Args:
+                *args: Positional options forwarded to ``PoolManager``.
+                **kwargs: Keyword options forwarded to ``PoolManager``.
+            """
             super().__init__(*args, **kwargs)
             self.pool_classes_by_scheme = {
                 "http": PublicHTTPConnectionPool,
@@ -130,6 +175,14 @@ def _public_address_adapter(requests: Any) -> Any:
             block: bool = False,
             **pool_kwargs: Any,
         ) -> None:
+            """Initialize the guarded urllib3 pool manager.
+
+            Args:
+                connections: Number of connection pools to cache.
+                maxsize: Maximum connections retained per pool.
+                block: Whether to block when a pool is exhausted.
+                **pool_kwargs: Additional pool-manager options.
+            """
             self.poolmanager = PublicPoolManager(
                 num_pools=connections,
                 maxsize=maxsize,
@@ -141,6 +194,14 @@ def _public_address_adapter(requests: Any) -> Any:
 
 
 def _download_image(url: str) -> bytes:
+    """Download an image while enforcing redirect and size limits.
+
+    Args:
+        url: Public HTTP or HTTPS image URL.
+
+    Returns:
+        Downloaded encoded image bytes.
+    """
     try:
         import requests
     except ModuleNotFoundError as error:
@@ -213,6 +274,14 @@ def _download_image(url: str) -> bytes:
 
 
 def _load_path(value: str) -> npt.NDArray[np.uint8]:
+    """Open and decode an image from a filesystem path.
+
+    Args:
+        value: Image path.
+
+    Returns:
+        Decoded RGB uint8 image.
+    """
     try:
         with Path(value).expanduser().open("rb") as file:
             return _decode_image(file)
@@ -226,6 +295,12 @@ def load_image(src: ImageInput) -> npt.NDArray[np.uint8]:
     NumPy inputs are assumed to already use RGB channel order. URL safeguards reduce common
     SSRF and resource-exhaustion risks, but services accepting untrusted URLs should also enforce
     network egress controls.
+
+    Args:
+        src: File path, HTTP URL, encoded bytes, or image array.
+
+    Returns:
+        An owned RGB uint8 image array.
     """
     if isinstance(src, np.ndarray):
         return _validate_array(src)

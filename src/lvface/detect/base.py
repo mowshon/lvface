@@ -18,19 +18,49 @@ class FaceDetector(ABC):
 
     @abstractmethod
     def detect(self, image: np.ndarray) -> list[Face]:
-        """Detect faces and five-point landmarks in an RGB image."""
+        """Detect faces and five-point landmarks in an RGB image.
+
+        Args:
+            image: Source RGB uint8 image.
+
+        Returns:
+            Detected faces in backend order.
+        """
 
     def align(self, image: np.ndarray, kps: np.ndarray, size: int = 112) -> np.ndarray:
-        """Align five landmarks to the canonical ArcFace template."""
+        """Align five landmarks to the canonical ArcFace template.
+
+        Args:
+            image: Source RGB uint8 image.
+            kps: Five facial landmarks with shape ``(5, 2)``.
+            size: Output crop size.
+
+        Returns:
+            The aligned RGB crop.
+        """
         return norm_crop(image, kps, size)
 
     def crop(self, image: np.ndarray) -> list[np.ndarray]:
-        """Detect and align every face that has five-point landmarks."""
+        """Detect and align every face that has landmarks.
+
+        Args:
+            image: Source RGB uint8 image.
+
+        Returns:
+            Aligned crops for faces with five-point landmarks.
+        """
         self.load()
         return [self.align(image, face.kps) for face in self.detect(image) if face.kps is not None]
 
     def detect_and_align(self, image: np.ndarray) -> list[Face]:
-        """Detect faces and attach aligned crops when landmarks are available."""
+        """Detect faces and attach crops when landmarks are available.
+
+        Args:
+            image: Source RGB uint8 image.
+
+        Returns:
+            Detected faces, with aligned crops where possible.
+        """
         self.load()
         faces = self.detect(image)
 

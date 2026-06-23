@@ -12,10 +12,16 @@ class YuNetDetector(FaceDetector):
     """Adapt OpenCV YuNet to the lvface detector interface."""
 
     def __init__(self, model_path: str | Path) -> None:
+        """Configure the detector.
+
+        Args:
+            model_path: Path to the YuNet ONNX model.
+        """
         self.model_path = str(model_path)
         self.detector: Any | None = None
 
     def load(self) -> None:
+        """Initialize the OpenCV YuNet detector once."""
         if self.detector is not None:
             return
 
@@ -31,6 +37,14 @@ class YuNetDetector(FaceDetector):
         )
 
     def detect(self, image: np.ndarray) -> list[Face]:
+        """Detect faces and convert YuNet landmarks to ArcFace order.
+
+        Args:
+            image: Source RGB image.
+
+        Returns:
+            Detected faces with bounding boxes and five-point landmarks.
+        """
         self.load()
         if self.detector is None:
             return []

@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 def _looks_like_path(model: str | os.PathLike[str], candidate: Path) -> bool:
+    """Return whether a model argument appears to be a file path.
+
+    Args:
+        model: Original model argument.
+        candidate: Path representation of the argument.
+
+    Returns:
+        ``True`` when the argument should be treated as a path.
+    """
     if not isinstance(model, str):
         return True
 
@@ -35,6 +44,11 @@ def _looks_like_path(model: str | os.PathLike[str], candidate: Path) -> bool:
 
 
 def _hf_hub_download() -> Callable[..., str]:
+    """Import the optional Hugging Face download function.
+
+    Returns:
+        The ``hf_hub_download`` callable.
+    """
     try:
         from huggingface_hub import hf_hub_download
     except ModuleNotFoundError as error:
@@ -48,6 +62,7 @@ def _hf_hub_download() -> Callable[..., str]:
 
 
 def _log_license_notice() -> None:
+    """Log the LVFace weight-license notice once per process."""
     global _license_notice_logged
     if _license_notice_logged:
         return
@@ -74,6 +89,13 @@ def resolve_weights(
     ``bytedance-research/LVFace`` revision
     ``b12702ab1f5c721748e054a66dc90e1edd1f0724``. Review the official model card and cite the
     LVFace paper.
+
+    Args:
+        model: Explicit ONNX path or registered model name.
+        cache_dir: Optional Hugging Face cache directory.
+
+    Returns:
+        Resolved path to a validated ONNX model.
     """
     candidate = Path(model).expanduser()
     if candidate.is_file():

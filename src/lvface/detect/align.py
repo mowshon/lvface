@@ -22,6 +22,14 @@ ARCFACE_DST.setflags(write=False)
 
 
 def _landmarks_array(kps: object) -> npt.NDArray[np.float64]:
+    """Validate five-point landmarks as a float64 array.
+
+    Args:
+        kps: Array-like landmark coordinates.
+
+    Returns:
+        A finite, nondegenerate array with shape ``(5, 2)``.
+    """
     try:
         landmarks = np.asarray(kps, dtype=np.float64)
     except (TypeError, ValueError) as error:
@@ -43,6 +51,15 @@ def _umeyama(
     source: npt.NDArray[np.float64],
     destination: npt.NDArray[np.float64],
 ) -> npt.NDArray[np.float64] | None:
+    """Estimate a 2D similarity transform with Umeyama's method.
+
+    Args:
+        source: Source points with shape ``(N, 2)``.
+        destination: Destination points with shape ``(N, 2)``.
+
+    Returns:
+        A ``(2, 3)`` affine matrix, or ``None`` for degenerate points.
+    """
     source_mean = source.mean(axis=0)
     destination_mean = destination.mean(axis=0)
     source_centered = source - source_mean
@@ -80,6 +97,14 @@ def _umeyama(
 
 
 def _invert_affine(matrix: npt.NDArray[np.floating]) -> npt.NDArray[np.float64]:
+    """Invert a two-dimensional affine transform.
+
+    Args:
+        matrix: Affine matrix with shape ``(2, 3)``.
+
+    Returns:
+        The inverse affine matrix.
+    """
     linear = np.asarray(matrix[:, :2], dtype=np.float64)
     translation = np.asarray(matrix[:, 2], dtype=np.float64)
     try:
@@ -99,7 +124,15 @@ def _invert_affine(matrix: npt.NDArray[np.floating]) -> npt.NDArray[np.float64]:
 
 
 def estimate_norm(kps: object, size: int = 112) -> npt.NDArray[np.float32]:
-    """Estimate the similarity transform from five landmarks to the ArcFace template."""
+    """Estimate the transform from landmarks to the ArcFace template.
+
+    Args:
+        kps: Five facial landmarks with shape ``(5, 2)``.
+        size: Output crop size; LVFace supports only 112.
+
+    Returns:
+        A float32 affine matrix with shape ``(2, 3)``.
+    """
     if size != 112:
         raise AlignmentError("only size=112 is supported for LVFace alignment")
 
@@ -112,6 +145,14 @@ def estimate_norm(kps: object, size: int = 112) -> npt.NDArray[np.float32]:
 
 
 def _validate_image(image: object) -> npt.NDArray[np.uint8]:
+    """Validate an RGB uint8 image array.
+
+    Args:
+        image: Object expected to be a non-empty RGB image.
+
+    Returns:
+        The validated image without copying it.
+    """
     if not isinstance(image, np.ndarray):
         raise TypeError("image must be a NumPy array")
 
@@ -129,7 +170,16 @@ def norm_crop(
     kps: object,
     size: int = 112,
 ) -> npt.NDArray[np.uint8]:
-    """Align an RGB image to a 112×112 RGB ArcFace crop using Pillow."""
+    """Align an RGB image to an ArcFace crop using Pillow.
+
+    Args:
+        image: Source RGB uint8 image.
+        kps: Five facial landmarks with shape ``(5, 2)``.
+        size: Output width and height; LVFace supports only 112.
+
+    Returns:
+        An owned aligned RGB uint8 crop.
+    """
     source = _validate_image(image)
     matrix = estimate_norm(kps, size)
     inverse = _invert_affine(matrix)

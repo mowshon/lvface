@@ -18,6 +18,14 @@ Device = Literal["auto", "cpu", "cuda"]
 
 
 def _resolve_providers(device: str) -> list[str]:
+    """Select available ONNX Runtime providers for a device request.
+
+    Args:
+        device: Requested device: ``"auto"``, ``"cpu"``, or ``"cuda"``.
+
+    Returns:
+        Providers ordered by preference.
+    """
     if device not in {"auto", "cpu", "cuda"}:
         raise ValueError("device must be 'auto', 'cpu', or 'cuda'")
 
@@ -44,6 +52,12 @@ class LVFaceOnnxEmbedder(FaceEmbedder):
     """LVFace embedding backend powered by ONNX Runtime."""
 
     def __init__(self, model_path: str | Path, *, device: Device = "auto") -> None:
+        """Configure an ONNX embedding backend.
+
+        Args:
+            model_path: Path to the LVFace ONNX model.
+            device: Preferred inference device.
+        """
         self.model_path = Path(model_path).expanduser()
         self.device = device
         self.session: onnxruntime.InferenceSession | None = None
@@ -75,6 +89,14 @@ class LVFaceOnnxEmbedder(FaceEmbedder):
         self,
         session: onnxruntime.InferenceSession,
     ) -> tuple[str, str, int | None]:
+        """Validate model input and output metadata.
+
+        Args:
+            session: Initialized ONNX Runtime session.
+
+        Returns:
+            Input name, output name, and optional fixed batch size.
+        """
         inputs = session.get_inputs()
         outputs = session.get_outputs()
         if len(inputs) != 1 or len(outputs) != 1:
@@ -142,6 +164,14 @@ class LVFaceOnnxEmbedder(FaceEmbedder):
         return input_meta.name, output_meta.name, fixed_batch_size
 
     def _forward(self, batch: npt.NDArray[np.float32]) -> npt.NDArray[np.floating]:
+        """Run the loaded ONNX model for one preprocessed batch.
+
+        Args:
+            batch: Float32 NCHW input batch.
+
+        Returns:
+            Raw model embeddings.
+        """
         session = self.session
         input_name = self.input_name
         output_name = self.output_name

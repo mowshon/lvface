@@ -27,6 +27,14 @@ ImageCollection = ImageInput | Sequence[ImageInput]
 
 
 def _device(device: str) -> Device:
+    """Validate a requested inference device.
+
+    Args:
+        device: Device name supplied by the caller.
+
+    Returns:
+        The validated device literal.
+    """
     if device not in {"auto", "cpu", "cuda"}:
         raise ValueError("device must be 'auto', 'cpu', or 'cuda'")
 
@@ -37,6 +45,15 @@ def _make_embedder(
     embedder: str | os.PathLike[str] | FaceEmbedder,
     device: Device,
 ) -> FaceEmbedder:
+    """Resolve an embedder instance or model reference.
+
+    Args:
+        embedder: Embedder instance, registered model name, or model path.
+        device: Device used for a newly created embedder.
+
+    Returns:
+        A configured face embedder.
+    """
     if isinstance(embedder, FaceEmbedder):
         return embedder
 
@@ -47,6 +64,15 @@ def _make_embedder(
 
 
 def _make_detector(detector: str | FaceDetector | None, device: Device) -> FaceDetector | None:
+    """Resolve an optional detector configuration.
+
+    Args:
+        detector: Detector instance, ``"insightface"``, or ``None``.
+        device: Device used for a newly created detector.
+
+    Returns:
+        A configured detector or ``None``.
+    """
     if detector is None or isinstance(detector, FaceDetector):
         return detector
 
@@ -60,6 +86,14 @@ def _make_detector(detector: str | FaceDetector | None, device: Device) -> FaceD
 
 
 def _cosine_metric(metric: str) -> str:
+    """Validate that cosine is used as the decision metric.
+
+    Args:
+        metric: Requested decision metric.
+
+    Returns:
+        The validated ``"cosine"`` value.
+    """
     if metric != "cosine":
         raise ValueError("metric must be 'cosine'; distance metrics are diagnostic only")
 
@@ -67,6 +101,14 @@ def _cosine_metric(metric: str) -> str:
 
 
 def _threshold(value: float | None) -> float:
+    """Validate or supply a cosine decision threshold.
+
+    Args:
+        value: Explicit threshold or ``None`` for the default.
+
+    Returns:
+        A finite threshold in the range [-1, 1].
+    """
     result = DEFAULT_THRESHOLDS["cosine"] if value is None else float(value)
     if not np.isfinite(result) or not -1.0 <= result <= 1.0:
         raise ValueError("threshold must be finite and between -1 and 1")
@@ -75,6 +117,14 @@ def _threshold(value: float | None) -> float:
 
 
 def _sources(value: ImageCollection) -> list[ImageInput]:
+    """Normalize one image source or a sequence into a list.
+
+    Args:
+        value: Single image source or sequence of sources.
+
+    Returns:
+        Image sources in input order.
+    """
     if isinstance(value, bytes):
         return [value]
 
@@ -88,10 +138,26 @@ def _sources(value: ImageCollection) -> list[ImageInput]:
 
 
 def _face_key(face: Face) -> tuple[int, int]:
+    """Return a stable ordering key for a face.
+
+    Args:
+        face: Face to identify.
+
+    Returns:
+        Its image and face indices.
+    """
     return face.image_index, face.face_index
 
 
 def _descending_score(score: float) -> float:
+    """Negate a score for ascending sorts.
+
+    Args:
+        score: Similarity score.
+
+    Returns:
+        The negated score.
+    """
     return -score
 
 
@@ -107,6 +173,15 @@ class FaceRecognizer:
         threshold: float | None = None,
         metric: str = "cosine",
     ) -> None:
+        """Configure the face-recognition pipeline.
+
+        Args:
+            embedder: Embedder instance, model name, or ONNX path.
+            detector: Detector instance, ``"insightface"``, or ``None`` for aligned inputs.
+            device: Preferred inference device.
+            threshold: Default cosine match threshold.
+            metric: Decision metric; currently only ``"cosine"`` is supported.
+        """
         resolved_device = _device(device)
         self.embedder = _make_embedder(embedder, resolved_device)
         self.detector = _make_detector(detector, resolved_device)
@@ -114,7 +189,14 @@ class FaceRecognizer:
         self.threshold = _threshold(threshold)
 
     def analyze(self, src: ImageInput) -> list[Face]:
-        """Load an image and attach normalized embeddings to every alignable face."""
+        """Detect, align, and embed every usable face in an image.
+
+        Args:
+            src: Image path, URL, bytes, or array.
+
+        Returns:
+            Analyzed faces with normalized embeddings.
+        """
         image = load_image(src)
         if self.detector is None:
             embedding = self.embedder.embed(image)
@@ -152,10 +234,24 @@ class FaceRecognizer:
         return aligned_faces
 
     @overload
-    def embed(self, src: ImageInput, *, select: None = None) -> list[Embedding]: ...
+    def embed(self, src: ImageInput, *, select: None = None) -> list[Embedding]:
+        """Embed every face when no selector is provided.
+
+        Args:
+            src: Image path, URL, bytes, or array.
+            select: Must be ``None`` to return every embedding.
+        """
+        ...
 
     @overload
-    def embed(self, src: ImageInput, *, select: Selector) -> Embedding: ...
+    def embed(self, src: ImageInput, *, select: Selector) -> Embedding:
+        """Embed one face selected by policy.
+
+        Args:
+            src: Image path, URL, bytes, or array.
+            select: Policy for choosing one detected face.
+        """
+        ...
 
     def embed(
         self,
@@ -163,7 +259,15 @@ class FaceRecognizer:
         *,
         select: Selector | None = None,
     ) -> Embedding | list[Embedding]:
-        """Embed every face, or select one face using an explicit policy."""
+        """Embed every face or select one by policy.
+
+        Args:
+            src: Image path, URL, bytes, or array.
+            select: Optional policy for selecting one detected face.
+
+        Returns:
+            All embeddings, or one selected embedding.
+        """
         faces = self.analyze(src)
         if select is None:
             return [face.embedding for face in faces if face.embedding is not None]
@@ -175,7 +279,14 @@ class FaceRecognizer:
         return embedding
 
     def embed_aligned(self, crop_112: ImageInput) -> Embedding:
-        """Embed one pre-aligned 112×112 RGB crop without detection."""
+        """Embed one pre-aligned crop without detection.
+
+        Args:
+            crop_112: Pre-aligned 112×112 RGB image source.
+
+        Returns:
+            A normalized face embedding.
+        """
         return self.embedder.embed(load_image(crop_112))
 
     def compare(
@@ -187,7 +298,18 @@ class FaceRecognizer:
         threshold: float | None = None,
         select: Selector = "largest",
     ) -> ComparisonResult:
-        """Compare one selected face from each image."""
+        """Compare one selected face from each image.
+
+        Args:
+            a: First image source.
+            b: Second image source.
+            metric: Optional decision-metric override.
+            threshold: Optional cosine-threshold override.
+            select: Policy for choosing a face in each image.
+
+        Returns:
+            Similarity metrics and the threshold decision.
+        """
         _cosine_metric(self.metric if metric is None else metric)
         boundary = self.threshold if threshold is None else _threshold(threshold)
         left = self.embed(a, select=select)
@@ -203,7 +325,16 @@ class FaceRecognizer:
         )
 
     def verify(self, a: ImageInput, b: ImageInput, **kwargs: Any) -> bool:
-        """Return whether two selected faces meet the cosine threshold."""
+        """Return whether two selected faces meet the threshold.
+
+        Args:
+            a: First image source.
+            b: Second image source.
+            **kwargs: Options forwarded to :meth:`compare`.
+
+        Returns:
+            ``True`` when the selected faces match.
+        """
         return self.compare(a, b, **kwargs).is_match
 
     def find(
@@ -215,7 +346,18 @@ class FaceRecognizer:
         top_k: int = 1,
         threshold: float | None = None,
     ) -> list[Match]:
-        """Find one selected query face among all faces in a gallery."""
+        """Find one selected query face in a gallery.
+
+        Args:
+            query: Query image source or collection.
+            gallery: Gallery image source or collection.
+            select: Policy for choosing the query face.
+            top_k: Maximum number of matches to return.
+            threshold: Optional cosine-threshold override.
+
+        Returns:
+            Matching gallery faces ordered by descending similarity.
+        """
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("top_k must be a positive integer")
 
@@ -244,7 +386,17 @@ class FaceRecognizer:
         assignment: Assignment = "greedy",
         threshold: float | None = None,
     ) -> MatchResult:
-        """Compare every face in two inputs and assign matching pairs."""
+        """Compare all faces in two collections and assign pairs.
+
+        Args:
+            source_a: Query image source or collection.
+            source_b: Candidate image source or collection.
+            assignment: Pair-selection strategy.
+            threshold: Optional cosine-threshold override.
+
+        Returns:
+            Similarity matrix and selected face pairs.
+        """
         if assignment not in {"greedy", "hungarian", "all"}:
             raise ValueError(f"unknown assignment method: {assignment!r}")
 
@@ -290,7 +442,16 @@ class FaceRecognizer:
         threshold: float | None = None,
         one_per_image: bool = True,
     ) -> list[list[Face]]:
-        """Group faces into conservative complete-linkage identity clusters."""
+        """Group faces into complete-linkage identity clusters.
+
+        Args:
+            images: Image source or collection to group.
+            threshold: Optional cosine-threshold override.
+            one_per_image: Prevent two faces from one image entering the same cluster.
+
+        Returns:
+            Stable clusters of mutually similar faces.
+        """
         if not isinstance(one_per_image, bool):
             raise TypeError("one_per_image must be a boolean")
 
@@ -348,6 +509,14 @@ class FaceRecognizer:
         return sorted(grouped, key=lambda cluster: _face_key(cluster[0]))
 
     def _collect(self, source: ImageCollection) -> list[Face]:
+        """Analyze image sources and assign collection indices.
+
+        Args:
+            source: Image source or collection.
+
+        Returns:
+            Faces labeled with their image and face positions.
+        """
         collected: list[Face] = []
         for image_index, item in enumerate(_sources(source)):
             for face in self.analyze(item):
@@ -368,10 +537,27 @@ class FaceRecognizer:
         query_faces: list[Face],
         candidate_faces: list[Face],
     ) -> npt.NDArray[np.float64]:
+        """Compute pairwise cosine similarity for two face lists.
+
+        Args:
+            query_faces: Faces forming matrix rows.
+            candidate_faces: Faces forming matrix columns.
+
+        Returns:
+            Pairwise cosine-similarity matrix.
+        """
         if not query_faces or not candidate_faces:
             return np.empty((len(query_faces), len(candidate_faces)), dtype=np.float64)
 
         def stack(faces: list[Face]) -> npt.NDArray[np.float32]:
+            """Stack face embeddings into a float32 matrix.
+
+            Args:
+                faces: Faces whose embeddings should be stacked.
+
+            Returns:
+                A matrix containing one embedding per row.
+            """
             embeddings = [face.embedding for face in faces]
             if any(embedding is None for embedding in embeddings):
                 raise RuntimeError("analyzed face does not have an embedding")
@@ -387,6 +573,17 @@ class FaceRecognizer:
         candidate_faces: list[Face],
         threshold: float,
     ) -> list[tuple[int, int]]:
+        """Rank all above-threshold matrix coordinates.
+
+        Args:
+            matrix: Pairwise similarity matrix.
+            query_faces: Faces corresponding to matrix rows.
+            candidate_faces: Faces corresponding to matrix columns.
+            threshold: Minimum accepted similarity.
+
+        Returns:
+            Matrix coordinates ordered by score and stable face keys.
+        """
         return sorted(
             (
                 (int(query_index), int(candidate_index))
@@ -404,6 +601,15 @@ class FaceRecognizer:
         matrix: npt.NDArray[np.float64],
         threshold: float,
     ) -> list[tuple[int, int]]:
+        """Select optimal one-to-one matches with Hungarian assignment.
+
+        Args:
+            matrix: Pairwise similarity matrix.
+            threshold: Minimum accepted similarity.
+
+        Returns:
+            Selected row and column index pairs.
+        """
         query_count, candidate_count = matrix.shape
         if query_count == 0 or candidate_count == 0:
             return []
@@ -444,6 +650,17 @@ class FaceRecognizer:
 
     @staticmethod
     def _match(query: Face, candidate: Face, score: float, threshold: float) -> Match:
+        """Build a match record for a face pair.
+
+        Args:
+            query: Query face.
+            candidate: Candidate face.
+            score: Cosine similarity.
+            threshold: Decision threshold.
+
+        Returns:
+            A populated match record.
+        """
         return Match(
             query=query,
             candidate=candidate,
@@ -454,6 +671,15 @@ class FaceRecognizer:
 
     @staticmethod
     def _select(faces: list[Face], select: Selector) -> Face:
+        """Select one face according to an explicit policy.
+
+        Args:
+            faces: Available faces.
+            select: Selection policy.
+
+        Returns:
+            The selected face.
+        """
         if select not in {"largest", "highest_score", "error"}:
             raise ValueError(f"unknown face selector: {select!r}")
 
@@ -476,6 +702,14 @@ class FaceRecognizer:
                 raise ValueError("largest selection requires bounding boxes")
 
             def area(face: Face) -> float:
+                """Return the nonnegative bounding-box area.
+
+                Args:
+                    face: Face with a bounding box.
+
+                Returns:
+                    Bounding-box area.
+                """
                 width, height = cast(BBox, face.bbox).wh
                 return float(max(0.0, width) * max(0.0, height))
 
@@ -485,6 +719,14 @@ class FaceRecognizer:
             raise ValueError("highest_score selection requires detection scores")
 
         def score(face: Face) -> float:
+            """Return the face detection score.
+
+            Args:
+                face: Face with a bounding box.
+
+            Returns:
+                Detection confidence.
+            """
             return float(cast(BBox, face.bbox).score)
 
         return max(faces, key=score)
