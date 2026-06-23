@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
+      - run: pytest -m "not model"
+
+  base-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .
+      - run: >-
+          python -c "import sys, lvface;
+          assert lvface.__version__ == '0.1.0';
+          assert not {'cv2', 'huggingface_hub', 'insightface', 'requests',
+          'scipy', 'sklearn', 'torch'} & set(sys.modules)"
+
+  hungarian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,hungarian]"
+      - run: pytest --no-cov tests/test_matching.py
+
+  model:
+    runs-on: ubuntu-latest
+    env:
+      MODEL_NAME: LVFace-T_Glint360K
+      MODEL_REPO: Mowshon/lvface-weights
+      MODEL_SHA256: bf8da0e1e93c432d9a1d874a9ba0990f5859f970e8864b3990f2f33d11f9cdb3
+      MODEL_REVISION: 83b567cd6a3fc34434667e4415b6125feceb39ea
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,detect]"
+      - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: ~/.cache/lvface
+          key: lvface-${{ env.MODEL_SHA256 }}
+      - name: Fetch pinned model
+        shell: bash
+        run: |
+          model_dir="$HOME/.cache/lvface/$MODEL_NAME"
+          model_path="$model_dir/$MODEL_NAME.onnx"
+          mkdir -p "$model_dir"
+          if [ ! -f "$model_path" ] || \
+             ! echo "$MODEL_SHA256  $model_path" | sha256sum --check --status; then
+            rm -f "$model_path"
+            curl --fail --location --retry 3 \
+              "https://huggingface.co/$MODEL_REPO/resolve/$MODEL_REVISION/$MODEL_NAME.onnx" \
+              --output "$model_path"
+          fi
+          echo "$MODEL_SHA256  $model_path" | sha256sum --check
+      - run: pytest
