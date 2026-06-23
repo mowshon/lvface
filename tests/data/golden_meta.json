@@ -1,0 +1,11 @@
+{
+  "crop_color_order": "RGB",
+  "model": "LVFace-T_Glint360K",
+  "mirror_repo_id": "Mowshon/lvface-weights",
+  "mirror_revision": "83b567cd6a3fc34434667e4415b6125feceb39ea",
+  "official_repo_id": "bytedance-research/LVFace",
+  "official_revision": "b12702ab1f5c721748e054a66dc90e1edd1f0724",
+  "model_sha256": "bf8da0e1e93c432d9a1d874a9ba0990f5859f970e8864b3990f2f33d11f9cdb3",
+  "preprocessing": "RGB_CHW_x_div_255_minus_0.5_div_0.5_v1",
+  "generator": "legacy LVFaceONNXInferencer._preprocess_image"
+}

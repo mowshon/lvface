@@ -1,0 +1,18 @@
+site_name: lvface
+site_description: ONNX face embedding, detection, alignment, and comparison
+repo_url: https://github.com/mowshon/lvface
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - API: api.md
+  - Contributing: contributing.md
+markdown_extensions:
+  - admonition
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
