@@ -128,15 +128,22 @@ def validate_model_file(path: str | Path, model: Model) -> Path:
     if not resolved.is_file():
         raise FileNotFoundError(f"model file not found: {resolved}")
 
+    # Keep path and descriptor metadata in separate comparison domains. On Windows,
+    # stat() and fstat() can describe the same file with different identity fields.
+    path_stat_before = resolved.stat()
+    cache_key = _validation_key(resolved, path_stat_before, model)
+    cached = _validated_files.get(cache_key)
+
+    if cached is not None:
+        if _validation_key(resolved, resolved.stat(), model) != cache_key:
+            raise ValueError(f"model file changed during validation: {resolved}")
+        return cached
+
     with resolved.open("rb") as file:
         stat_before = os.fstat(file.fileno())
-        cache_key = _validation_key(resolved, stat_before, model)
-        cached = _validated_files.get(cache_key)
-
-        if cached is not None:
-            if _validation_key(resolved, resolved.stat(), model) != cache_key:
-                raise ValueError(f"model file changed during validation: {resolved}")
-            return cached
+        descriptor_key = _validation_key(resolved, stat_before, model)
+        if _validation_key(resolved, resolved.stat(), model) != cache_key:
+            raise ValueError(f"model file changed during validation: {resolved}")
 
         if stat_before.st_size != model.size:
             raise ValueError(
@@ -152,7 +159,7 @@ def validate_model_file(path: str | Path, model: Model) -> Path:
 
     # Re-stat the path as well as the open file to catch replacements mid-read.
     if (
-        _validation_key(resolved, stat_after, model) != cache_key
+        _validation_key(resolved, stat_after, model) != descriptor_key
         or _validation_key(resolved, resolved.stat(), model) != cache_key
     ):
         raise ValueError(f"model file changed during validation: {resolved}")

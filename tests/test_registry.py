@@ -164,7 +164,60 @@ def test_validate_model_file_rejects_changes_during_hashing(
         registry.validate_model_file(path, model)
 
 
-def test_validate_model_file_rejects_path_replacement_during_hashing(
+def test_validate_model_file_rejects_path_changes_before_hashing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = tiny_model()
+    path = tmp_path / model.filename
+    path.write_bytes(b"weights")
+    real_open = Path.open
+    real_stat = Path.stat
+    opened = False
+
+    def tracking_open(self: Path, *args: object, **kwargs: object) -> object:
+        nonlocal opened
+        file = real_open(self, *args, **kwargs)
+        if self == path:
+            opened = True
+        return file
+
+    def changed_stat(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        stat = real_stat(self, *args, **kwargs)
+        if opened and self == path:
+            values = list(stat)
+            values[8] += 1
+            return os.stat_result(values)
+        return stat
+
+    monkeypatch.setattr(Path, "open", tracking_open)
+    monkeypatch.setattr(Path, "stat", changed_stat)
+
+    with pytest.raises(ValueError, match="changed during validation"):
+        registry.validate_model_file(path, model)
+
+
+def test_validate_model_file_allows_platform_specific_descriptor_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = tiny_model()
+    path = tmp_path / model.filename
+    path.write_bytes(b"weights")
+    real_fstat = registry.os.fstat
+
+    def distinct_fstat(fd: int) -> os.stat_result:
+        stat = real_fstat(fd)
+        values = list(stat)
+        values[1] += 1
+        return os.stat_result(values)
+
+    monkeypatch.setattr(registry.os, "fstat", distinct_fstat)
+
+    assert registry.validate_model_file(path, model) == path.resolve()
+
+
+def test_validate_model_file_rejects_path_changes_during_hashing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -172,24 +225,31 @@ def test_validate_model_file_rejects_path_replacement_during_hashing(
     path = tmp_path / model.filename
     path.write_bytes(b"weights")
     real_sha256 = registry.hashlib.sha256
+    real_stat = Path.stat
+    hashing_started = False
 
-    class ReplacingHash:
+    class ChangingHash:
         def __init__(self) -> None:
             self.digest = real_sha256()
-            self.replaced = False
 
         def update(self, chunk: bytes) -> None:
+            nonlocal hashing_started
             self.digest.update(chunk)
-            if not self.replaced:
-                replacement = tmp_path / "replacement.onnx"
-                replacement.write_bytes(b"weights")
-                replacement.replace(path)
-                self.replaced = True
+            hashing_started = True
 
         def hexdigest(self) -> str:
             return self.digest.hexdigest()
 
-    monkeypatch.setattr(registry.hashlib, "sha256", ReplacingHash)
+    def changed_stat(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        stat = real_stat(self, *args, **kwargs)
+        if hashing_started and self == path:
+            values = list(stat)
+            values[8] += 1
+            return os.stat_result(values)
+        return stat
+
+    monkeypatch.setattr(registry.hashlib, "sha256", ChangingHash)
+    monkeypatch.setattr(Path, "stat", changed_stat)
 
     with pytest.raises(ValueError, match="changed during validation"):
         registry.validate_model_file(path, model)

@@ -26,11 +26,15 @@ def test_load_image_accepts_path_bytes_and_rgb_array(tmp_path: Path) -> None:
 
     from_path = load_image(path)
     from_string_path = load_image(str(path))
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.chdir(tmp_path)
+        from_relative_string_path = load_image(path.name)
     from_bytes = load_image(path.read_bytes())
     from_array = load_image(array)
 
     assert from_path.shape == (2, 3, 3)
     np.testing.assert_array_equal(from_path, from_string_path)
+    np.testing.assert_array_equal(from_path, from_relative_string_path)
     np.testing.assert_array_equal(from_path, from_bytes)
     np.testing.assert_array_equal(from_array, array)
     assert not np.shares_memory(from_array, array)
