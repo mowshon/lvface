@@ -59,6 +59,35 @@ and does not need `[hub]`:
 recognizer = FaceRecognizer("/models/LVFace-T_Glint360K.onnx")
 ```
 
+### Choose model weights
+
+All four weights use the same API and produce 512-dimensional embeddings. The difference is the
+model capacity: larger models generally require more download space, memory, and inference time
+in exchange for better benchmark accuracy. `LVFace-T_Glint360K` is the default when no model is
+specified.
+
+| Model name | Download size | When to use it | IJB-C @ 1e-6 | IJB-C @ 1e-5 | IJB-C @ 1e-4 | IJB-B @ 1e-4 |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| `LVFace-T_Glint360K` | 76.7 MB | Default; fastest and smallest choice for local apps, CPU use, and initial evaluation | 88.53 | 95.63 | 96.67 | 95.41 |
+| `LVFace-S_Glint360K` | 304.2 MB | A balanced upgrade when recognition quality matters more than model size and latency | 90.06 | 96.52 | 97.31 | 96.14 |
+| `LVFace-B_Glint360K` | 455.5 MB | Best overall accuracy/size tradeoff for accuracy-focused deployments | 90.06 | 97.00 | 97.70 | 96.51 |
+| `LVFace-L_Glint360K` | 1.02 GB | Largest model; mainly for benchmarking or testing whether its small gains at some operating points justify the cost | 89.51 | 97.02 | 97.66 | 96.51 |
+
+The benchmark values are verification rates in percent; higher is better. The number after `@`
+is the false-accept-rate operating point, so `1e-6` is stricter than `1e-4`. These results are
+useful for comparing models, but production thresholds must still be calibrated on representative
+data.
+
+Select another registered model by name:
+
+```python
+recognizer = FaceRecognizer("LVFace-B_Glint360K")
+```
+
+Named weights are downloaded once, stored in the local model cache, and SHA-256 verified before
+use. Later runs reuse the cached file. Do not compare or combine embeddings created by different
+LVFace model sizes: use the same weight file for enrollment, indexing, and queries.
+
 Model resolution and download happen while `FaceRecognizer` is constructed. The ONNX Runtime
 session itself is still created lazily on the first embedding call.
 
