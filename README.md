@@ -4,6 +4,10 @@
 people across portraits, group photos, or whole albums. The high-level API is small, while the
 detector and embedder are both replaceable.
 
+This package was inspired by ByteDance's
+[`bytedance/lvface`](https://github.com/bytedance/lvface) repository and was created to make
+this splendid model easy to install and use through the `pip` package manager.
+
 ```python
 from lvface import FaceRecognizer
 
