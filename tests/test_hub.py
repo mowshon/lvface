@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import builtins
 import hashlib
-import logging
 import sys
 import types
 from pathlib import Path
@@ -20,11 +19,6 @@ def tiny_model(content: bytes = b"weights") -> registry.Model:
         sha256=hashlib.sha256(content).hexdigest(),
         size=len(content),
     )
-
-
-@pytest.fixture(autouse=True)
-def reset_license_notice(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(hub, "_license_notice_logged", False)
 
 
 def test_explicit_file_bypasses_hub_import(
@@ -103,7 +97,6 @@ def test_invalid_package_cache_is_rejected(
 def test_download_uses_pinned_root_coordinates_and_reuses_hf_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     model = tiny_model()
     monkeypatch.setitem(registry.MODELS, "Tiny", model)
@@ -119,9 +112,8 @@ def test_download_uses_pinned_root_coordinates_and_reuses_hf_cache(
 
     monkeypatch.setattr(hub, "_hf_hub_download", lambda: fake_download)
 
-    with caplog.at_level(logging.WARNING, logger="lvface.hub"):
-        assert hub.resolve_weights("Tiny", cache_dir=tmp_path / "hf-cache") == downloaded.resolve()
-        assert hub.resolve_weights("Tiny", cache_dir=tmp_path / "hf-cache") == downloaded.resolve()
+    assert hub.resolve_weights("Tiny", cache_dir=tmp_path / "hf-cache") == downloaded.resolve()
+    assert hub.resolve_weights("Tiny", cache_dir=tmp_path / "hf-cache") == downloaded.resolve()
 
     assert calls == [
         {
@@ -138,7 +130,6 @@ def test_download_uses_pinned_root_coordinates_and_reuses_hf_cache(
         },
     ]
     assert all("subfolder" not in call for call in calls)
-    assert caplog.text.count("weight licensing is unresolved") == 1
 
 
 @pytest.mark.parametrize(
@@ -208,22 +199,3 @@ def test_hub_import_returns_download_function(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_module)
 
     assert hub._hf_hub_download() is fake_download
-
-
-def test_license_notice_handles_concurrent_prior_logging(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    class LoggingLock:
-        def __enter__(self) -> None:
-            monkeypatch.setattr(hub, "_license_notice_logged", True)
-
-        def __exit__(self, *args: object) -> None:
-            return None
-
-    monkeypatch.setattr(hub, "_license_notice_lock", LoggingLock())
-
-    with caplog.at_level(logging.WARNING, logger="lvface.hub"):
-        hub._log_license_notice()
-
-    assert caplog.text == ""

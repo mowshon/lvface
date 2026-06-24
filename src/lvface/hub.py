@@ -2,24 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import os
-import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
 from lvface.registry import MODELS, model_cache_path, validate_model_file
-
-_LICENSE_NOTICE = (
-    "LVFace weight licensing is unresolved: the official repository metadata says MIT, while "
-    "its model-card prose restricts downloaded models to non-commercial research. Weights are "
-    "downloaded from the unofficial Mowshon/lvface-weights preservation mirror, which grants "
-    "no additional rights. Review the official model card and cite the LVFace paper."
-)
-_license_notice_lock = threading.Lock()
-_license_notice_logged = False
-logger = logging.getLogger(__name__)
 
 
 def _looks_like_path(model: str | os.PathLike[str], candidate: Path) -> bool:
@@ -59,20 +47,6 @@ def _hf_hub_download() -> Callable[..., str]:
             ) from error
         raise
     return cast(Callable[..., str], hf_hub_download)
-
-
-def _log_license_notice() -> None:
-    """Log the LVFace weight-license notice once per process."""
-    global _license_notice_logged
-    if _license_notice_logged:
-        return
-
-    with _license_notice_lock:
-        if _license_notice_logged:
-            return
-
-        logger.warning(_LICENSE_NOTICE)
-        _license_notice_logged = True
 
 
 def resolve_weights(
@@ -116,7 +90,6 @@ def resolve_weights(
 
     # Download only after local resolution and validation have been exhausted.
     download = _hf_hub_download()
-    _log_license_notice()
     downloaded = download(
         repo_id=registered_model.repo_id,
         filename=registered_model.filename,

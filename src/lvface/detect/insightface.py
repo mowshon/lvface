@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import warnings
 from typing import Any
 
 import numpy as np
@@ -13,26 +12,6 @@ from lvface.types import BBox, Face
 
 from .align import _validate_image, estimate_norm
 from .base import FaceDetector
-
-_LICENSE_WARNING = (
-    "InsightFace bundled model packs are licensed for non-commercial research use only. "
-    "Use a detector with appropriately licensed weights or pre-aligned crops for other uses."
-)
-_license_warning_lock = threading.Lock()
-_license_warning_emitted = False
-
-
-def _warn_about_model_license() -> None:
-    """Emit the InsightFace model-license warning once per process."""
-    global _license_warning_emitted
-    if _license_warning_emitted:
-        return
-    with _license_warning_lock:
-        if _license_warning_emitted:
-            return
-        warnings.warn(_LICENSE_WARNING, UserWarning, stacklevel=3)
-        _license_warning_emitted = True
-
 
 def _import_insightface() -> tuple[type[Any], Any]:
     """Import optional InsightFace detection components.
@@ -102,7 +81,6 @@ class InsightFaceDetector(FaceDetector):
 
             providers = _resolve_providers(self.device)
             face_analysis, face_align = _import_insightface()
-            _warn_about_model_license()
             app = face_analysis(
                 name=self.name,
                 allowed_modules=["detection"],

@@ -54,11 +54,10 @@ class FakeAnalysis:
 
 
 @pytest.fixture(autouse=True)
-def reset_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+def reset_backend() -> None:
     FakeAnalysis.instances = []
     FakeAnalysis.started = None
     FakeAnalysis.finish = None
-    monkeypatch.setattr(backend, "_license_warning_emitted", False)
 
 
 def install_fake_insightface(monkeypatch: pytest.MonkeyPatch) -> FakeFaceAlign:
@@ -87,8 +86,7 @@ def test_load_is_lazy_idempotent_and_configures_detection_only(
     )
     detector = InsightFaceDetector("buffalo_sc", device="cuda", det_size=(320, 240))
 
-    with pytest.warns(UserWarning, match="non-commercial"):
-        detector.load()
+    detector.load()
     detector.load()
 
     assert len(FakeAnalysis.instances) == 1
@@ -101,34 +99,17 @@ def test_load_is_lazy_idempotent_and_configures_detection_only(
     assert app.prepare_calls == [(0, (320, 240))]
 
 
-def test_license_warning_is_emitted_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_builds_one_detector_per_instance(monkeypatch: pytest.MonkeyPatch) -> None:
     install_fake_insightface(monkeypatch)
     monkeypatch.setattr(backend, "_resolve_providers", lambda device: ["CPUExecutionProvider"])
 
-    with pytest.warns(UserWarning, match="non-commercial") as captured:
-        InsightFaceDetector().load()
-        InsightFaceDetector("buffalo_sc").load()
+    InsightFaceDetector().load()
+    InsightFaceDetector("buffalo_sc").load()
 
-    assert len(captured) == 1
     assert [item.prepare_calls for item in FakeAnalysis.instances] == [
         [(-1, (640, 640))],
         [(-1, (640, 640))],
     ]
-
-
-def test_license_warning_handles_a_concurrent_prior_emission(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class EmittingLock:
-        def __enter__(self) -> None:
-            monkeypatch.setattr(backend, "_license_warning_emitted", True)
-
-        def __exit__(self, *args: object) -> None:
-            return None
-
-    monkeypatch.setattr(backend, "_license_warning_lock", EmittingLock())
-
-    backend._warn_about_model_license()
 
 
 def test_concurrent_load_builds_one_detector(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -138,14 +119,13 @@ def test_concurrent_load_builds_one_detector(monkeypatch: pytest.MonkeyPatch) ->
     FakeAnalysis.finish = threading.Event()
     detector = InsightFaceDetector()
 
-    with pytest.warns(UserWarning):
-        threads = [threading.Thread(target=detector.load) for _ in range(2)]
-        threads[0].start()
-        assert FakeAnalysis.started.wait(timeout=5)
-        threads[1].start()
-        FakeAnalysis.finish.set()
-        for thread in threads:
-            thread.join(timeout=5)
+    threads = [threading.Thread(target=detector.load) for _ in range(2)]
+    threads[0].start()
+    assert FakeAnalysis.started.wait(timeout=5)
+    threads[1].start()
+    FakeAnalysis.finish.set()
+    for thread in threads:
+        thread.join(timeout=5)
 
     assert len(FakeAnalysis.instances) == 1
     assert all(not thread.is_alive() for thread in threads)
@@ -157,8 +137,7 @@ def test_detect_swaps_rgb_to_bgr_filters_scores_and_builds_faces(
     install_fake_insightface(monkeypatch)
     monkeypatch.setattr(backend, "_resolve_providers", lambda device: ["CPUExecutionProvider"])
     detector = InsightFaceDetector(min_score=0.5)
-    with pytest.warns(UserWarning):
-        detector.load()
+    detector.load()
     app = FakeAnalysis.instances[0]
     app.faces = [
         SimpleNamespace(
@@ -212,8 +191,7 @@ def test_detect_rejects_invalid_backend_bbox(
     install_fake_insightface(monkeypatch)
     monkeypatch.setattr(backend, "_resolve_providers", lambda device: ["CPUExecutionProvider"])
     detector = InsightFaceDetector()
-    with pytest.warns(UserWarning):
-        detector.load()
+    detector.load()
     FakeAnalysis.instances[0].faces = [SimpleNamespace(bbox=bbox, det_score=0.9, kps=ARCFACE_DST)]
 
     with pytest.raises(ValueError, match="bounding box"):
@@ -234,8 +212,7 @@ def test_detect_rejects_invalid_backend_landmarks(
     install_fake_insightface(monkeypatch)
     monkeypatch.setattr(backend, "_resolve_providers", lambda device: ["CPUExecutionProvider"])
     detector = InsightFaceDetector()
-    with pytest.warns(UserWarning):
-        detector.load()
+    detector.load()
     FakeAnalysis.instances[0].faces = [
         SimpleNamespace(
             bbox=np.array([1, 2, 30, 40], dtype=np.float32),
@@ -257,8 +234,7 @@ def test_reference_align_delegates_without_swapping_rgb(
     image = np.zeros((112, 112, 3), dtype=np.uint8)
     image[0, 0] = [10, 20, 30]
 
-    with pytest.warns(UserWarning):
-        crop = detector.align(image, ARCFACE_DST)
+    crop = detector.align(image, ARCFACE_DST)
 
     assert crop.dtype == np.uint8
     assert crop[0, 0].tolist() == [10, 20, 30]
