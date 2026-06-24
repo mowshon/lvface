@@ -42,9 +42,9 @@ jobs:
       - run: python -m pip install -e .
       - run: >-
           python -c "import sys, lvface;
-          assert lvface.__version__ == '0.1.0';
+          assert lvface.__version__ == '0.2.0';
           assert not {'cv2', 'huggingface_hub', 'insightface', 'requests',
-          'scipy', 'sklearn', 'torch'} & set(sys.modules)"
+          'onnxruntime', 'scipy', 'sklearn', 'torch'} & set(sys.modules)"
 
   hungarian:
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev,detect]"
+      - run: python -m pip install -e ".[cpu,dev,detect]"
       - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
         with:
           path: ~/.cache/lvface

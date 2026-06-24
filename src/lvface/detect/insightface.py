@@ -7,11 +7,13 @@ from typing import Any
 
 import numpy as np
 
-from lvface.embed.onnx import Device, _resolve_providers
+from lvface.runtime import Device
+from lvface.runtime import resolve_ort_providers as _resolve_providers
 from lvface.types import BBox, Face
 
 from .align import _validate_image, estimate_norm
 from .base import FaceDetector
+
 
 def _import_insightface() -> tuple[type[Any], Any]:
     """Import optional InsightFace detection components.
@@ -86,7 +88,7 @@ class InsightFaceDetector(FaceDetector):
                 allowed_modules=["detection"],
                 providers=providers,
             )
-            ctx_id = 0 if providers[0] == "CUDAExecutionProvider" else -1
+            ctx_id = -1 if providers[0] == "CPUExecutionProvider" else 0
             app.prepare(ctx_id=ctx_id, det_size=self.det_size)
             self._face_align = face_align
             self.app = app

@@ -7,7 +7,7 @@ name = "lvface"
 dynamic = ["version"]
 description = "Modern face-embedding framework for detection, alignment, embedding, and comparison."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Mowshon" }]
@@ -44,11 +44,23 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=2.4",
-  "onnxruntime>=1.23.2",
   "pillow>=12.2",
 ]
 
 [project.optional-dependencies]
+cpu = ["onnxruntime>=1.23.2"]
+cuda = [
+  "onnxruntime-gpu>=1.27.0; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cuda-runtime>=13,<14; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cuda-nvrtc>=13,<14; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cublas>=13,<14; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cudnn-cu13>=9,<10; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cufft>=12,<13; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-curand>=10,<11; platform_system == 'Linux' or platform_system == 'Windows'",
+]
+directml = [
+  "onnxruntime-directml>=1.24.4; platform_system == 'Windows'",
+]
 http = ["requests>=2.32"]
 detect = ["insightface>=1.0.1"]
 hub = ["huggingface-hub>=1.20"]
@@ -71,6 +83,37 @@ dev = [
   "ruff>=0.15",
 ]
 all = [
+  "onnxruntime>=1.23.2",
+  "huggingface-hub>=1.20",
+  "insightface>=1.0.1",
+  "requests>=2.32",
+  "scikit-learn>=1.7",
+  "scipy>=1.15",
+]
+all-cpu = [
+  "onnxruntime>=1.23.2",
+  "huggingface-hub>=1.20",
+  "insightface>=1.0.1",
+  "requests>=2.32",
+  "scikit-learn>=1.7",
+  "scipy>=1.15",
+]
+all-cuda = [
+  "onnxruntime-gpu>=1.27.0; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cuda-runtime>=13,<14; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cuda-nvrtc>=13,<14; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cublas>=13,<14; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cudnn-cu13>=9,<10; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-cufft>=12,<13; platform_system == 'Linux' or platform_system == 'Windows'",
+  "nvidia-curand>=10,<11; platform_system == 'Linux' or platform_system == 'Windows'",
+  "huggingface-hub>=1.20",
+  "insightface>=1.0.1",
+  "requests>=2.32",
+  "scikit-learn>=1.7",
+  "scipy>=1.15",
+]
+all-directml = [
+  "onnxruntime-directml>=1.24.4; platform_system == 'Windows'",
   "huggingface-hub>=1.20",
   "insightface>=1.0.1",
   "requests>=2.32",

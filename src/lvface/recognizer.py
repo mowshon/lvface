@@ -18,10 +18,10 @@ from lvface.hub import resolve_weights
 from lvface.io import ImageInput, load_image
 from lvface.metrics import DEFAULT_THRESHOLDS, dot, euclidean, pairwise_cosine, to_percentage
 from lvface.registry import DEFAULT_MODEL
+from lvface.runtime import Device
 from lvface.types import BBox, ComparisonResult, Embedding, Face, Match, MatchResult
 
 Selector = Literal["largest", "highest_score", "error"]
-Device = Literal["auto", "cpu", "cuda"]
 Assignment = Literal["greedy", "hungarian", "all"]
 ImageCollection = ImageInput | Sequence[ImageInput]
 
@@ -35,8 +35,8 @@ def _device(device: str) -> Device:
     Returns:
         The validated device literal.
     """
-    if device not in {"auto", "cpu", "cuda"}:
-        raise ValueError("device must be 'auto', 'cpu', or 'cuda'")
+    if device not in {"auto", "cpu", "cuda", "directml"}:
+        raise ValueError("device must be 'auto', 'cpu', 'cuda', or 'directml'")
 
     return cast(Device, device)
 
