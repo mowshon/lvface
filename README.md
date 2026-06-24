@@ -34,39 +34,60 @@ print(f"cosine={result.cosine:.4f}, display={result.percentage:.1f}%")
 
 Python 3.11, 3.12, or 3.13 is required.
 
-```bash
-# Recommended CPU install: recognition from ordinary photos + automatic weight download
-python -m pip install "lvface[cpu,detect,hub]"
-
-# Local ONNX weights and already aligned 112×112 face crops
-python -m pip install "lvface[cpu]"
-
-# Add guarded http(s) image loading
-python -m pip install "lvface[cpu,detect,hub,http]"
-```
-
-Install exactly one ONNX Runtime backend per environment:
+Run exactly one command for your machine:
 
 ```bash
 # CPU, any supported OS
-python -m pip install "lvface[cpu]"
+python -m pip install "lvface[all-cpu]"
 
-# NVIDIA CUDA on Linux or Windows
-python -m pip install "lvface[cuda]"
+# NVIDIA CUDA, Linux or Windows
+python -m pip install "lvface[all-cuda]"
 
 # DirectML on Windows for DirectX 12-capable AMD, Intel, or NVIDIA GPUs
-python -m pip install "lvface[directml]"
+python -m pip install "lvface[all-directml]"
 ```
 
-Do not install `lvface[cpu]`, `lvface[cuda]`, and `lvface[directml]` into the same virtual
-environment. These backends provide the same `onnxruntime` import name; create a fresh
-environment when switching backend.
+Use `all-cpu` if you are unsure. Use `all-cuda` for NVIDIA GPUs. On Windows without CUDA,
+use `all-directml` for DirectML-supported GPUs.
 
-Combine one backend with other feature extras as needed, for example
-`lvface[cuda,detect,hub]`.
+Install exactly one ONNX Runtime backend per virtual environment. Do not install
+`lvface[all-cpu]`, `lvface[all-cuda]`, and `lvface[all-directml]` into the same environment.
+These backends provide the same `onnxruntime` import name; create a fresh environment when
+switching backend.
 
-The `[detect]` extra installs the default InsightFace detector. The `[hub]` extra lets a
-registered model name download its pinned ONNX file on first construction:
+### Install variants
+
+The `all-*` extras above install the complete common feature set: a runtime backend, the default
+InsightFace detector, automatic model download, guarded http(s) image loading, clustering, and
+Hungarian assignment.
+
+For smaller installs, combine exactly one backend with only the features you need:
+
+```bash
+# Local ONNX weights and already aligned 112×112 face crops
+python -m pip install "lvface[cpu]"
+
+# Recognition from ordinary photos + automatic weight download
+python -m pip install "lvface[cpu,detect,hub]"
+
+# CUDA backend with detection and automatic weight download
+python -m pip install "lvface[cuda,detect,hub]"
+```
+
+Available extras are:
+
+| Extra | What it adds |
+| --- | --- |
+| `cpu` | ONNX Runtime CPU backend |
+| `cuda` | ONNX Runtime GPU backend for NVIDIA CUDA on Linux or Windows |
+| `directml` | ONNX Runtime DirectML backend on Windows |
+| `detect` | Default InsightFace detector |
+| `hub` | Pinned LVFace ONNX weight download by registered model name |
+| `http` | Guarded http(s) image loading |
+| `cluster` | Album grouping support through scikit-learn |
+| `hungarian` | Globally optimal one-to-one matching through SciPy |
+
+With `[hub]`, a registered model name downloads its pinned ONNX file on first construction:
 
 ```python
 recognizer = FaceRecognizer("LVFace-T_Glint360K")
