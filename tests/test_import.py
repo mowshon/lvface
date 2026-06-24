@@ -6,7 +6,7 @@ import lvface
 
 
 def test_version_is_exposed() -> None:
-    assert lvface.__version__ == "0.1.0"
+    assert lvface.__version__ == "0.2.0"
     assert lvface.__all__ == [
         "AlignmentError",
         "BBox",
@@ -32,11 +32,18 @@ def test_version_is_exposed() -> None:
     ]
 
 
+def test_lazy_public_exports_are_available() -> None:
+    assert lvface.__getattr__("metrics").__name__ == "lvface.metrics"
+    assert lvface.DEFAULT_MODEL == "LVFace-T_Glint360K"
+    assert lvface.resolve_weights.__name__ == "resolve_weights"
+
+
 def test_import_has_no_optional_runtime_dependencies() -> None:
     optional_modules = (
         "cv2",
         "huggingface_hub",
         "insightface",
+        "onnxruntime",
         "requests",
         "scipy",
         "sklearn",

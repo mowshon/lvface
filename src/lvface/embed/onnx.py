@@ -3,49 +3,33 @@
 from __future__ import annotations
 
 import threading
-import warnings
 from numbers import Integral
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
-import onnxruntime
+
+import lvface.runtime as runtime
+from lvface.runtime import Device
 
 from .base import FaceEmbedder
 
-Device = Literal["auto", "cpu", "cuda"]
-
 
 def _resolve_providers(device: str) -> list[str]:
-    """Select available ONNX Runtime providers for a device request.
+    """Backward-compatible wrapper around the shared runtime resolver."""
+    return runtime.resolve_ort_providers(device)
 
-    Args:
-        device: Requested device: ``"auto"``, ``"cpu"``, or ``"cuda"``.
 
-    Returns:
-        Providers ordered by preference.
-    """
-    if device not in {"auto", "cpu", "cuda"}:
-        raise ValueError("device must be 'auto', 'cpu', or 'cuda'")
+def _session_options(ort: Any, providers: list[str]) -> Any | None:
+    """Create provider-specific ONNX Runtime session options."""
+    if providers[0] != "DmlExecutionProvider":
+        return None
 
-    available = set(onnxruntime.get_available_providers())
-    if "CPUExecutionProvider" not in available:
-        raise RuntimeError("ONNX Runtime CPUExecutionProvider is unavailable")
-
-    if device == "cpu":
-        return ["CPUExecutionProvider"]
-
-    if "CUDAExecutionProvider" in available:
-        return ["CUDAExecutionProvider", "CPUExecutionProvider"]
-
-    if device == "cuda":
-        warnings.warn(
-            "CUDAExecutionProvider was requested but is unavailable; using CPUExecutionProvider",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-    return ["CPUExecutionProvider"]
+    options = ort.SessionOptions()
+    options.enable_mem_pattern = False
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    return options
 
 
 class LVFaceOnnxEmbedder(FaceEmbedder):
@@ -60,10 +44,12 @@ class LVFaceOnnxEmbedder(FaceEmbedder):
         """
         self.model_path = Path(model_path).expanduser()
         self.device = device
-        self.session: onnxruntime.InferenceSession | None = None
+        self.session: Any | None = None
+        self.providers: list[str] | None = None
         self.input_name: str | None = None
         self.output_name: str | None = None
         self._load_lock = threading.Lock()
+        self._run_lock = threading.Lock()
         self._fixed_batch_size = None
 
     def load(self) -> None:
@@ -77,17 +63,27 @@ class LVFaceOnnxEmbedder(FaceEmbedder):
             if not self.model_path.is_file():
                 raise FileNotFoundError(f"ONNX model not found: {self.model_path}")
 
+            ort = runtime._import_onnxruntime()
             providers = _resolve_providers(self.device)
-            session = onnxruntime.InferenceSession(str(self.model_path), providers=providers)
+            options = _session_options(ort, providers)
+            if options is None:
+                session = ort.InferenceSession(str(self.model_path), providers=providers)
+            else:
+                session = ort.InferenceSession(
+                    str(self.model_path),
+                    sess_options=options,
+                    providers=providers,
+                )
             input_name, output_name, fixed_batch_size = self._validate_io(session)
             self.input_name = input_name
             self.output_name = output_name
             self._fixed_batch_size = fixed_batch_size
+            self.providers = providers
             self.session = session
 
     def _validate_io(
         self,
-        session: onnxruntime.InferenceSession,
+        session: Any,
     ) -> tuple[str, str, int | None]:
         """Validate model input and output metadata.
 
@@ -178,5 +174,9 @@ class LVFaceOnnxEmbedder(FaceEmbedder):
         if session is None or input_name is None or output_name is None:
             raise RuntimeError("embedder must be loaded before inference")
 
-        output = session.run([output_name], {input_name: batch})[0]
+        if self.providers is not None and self.providers[0] == "DmlExecutionProvider":
+            with self._run_lock:
+                output = session.run([output_name], {input_name: batch})[0]
+        else:
+            output = session.run([output_name], {input_name: batch})[0]
         return cast(npt.NDArray[np.floating], output)

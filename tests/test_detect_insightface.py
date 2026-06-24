@@ -112,6 +112,19 @@ def test_load_builds_one_detector_per_instance(monkeypatch: pytest.MonkeyPatch) 
     ]
 
 
+def test_directml_provider_uses_gpu_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_insightface(monkeypatch)
+    monkeypatch.setattr(
+        backend,
+        "_resolve_providers",
+        lambda device: ["DmlExecutionProvider", "CPUExecutionProvider"],
+    )
+
+    InsightFaceDetector(device="directml").load()
+
+    assert FakeAnalysis.instances[0].prepare_calls == [(0, (640, 640))]
+
+
 def test_concurrent_load_builds_one_detector(monkeypatch: pytest.MonkeyPatch) -> None:
     install_fake_insightface(monkeypatch)
     monkeypatch.setattr(backend, "_resolve_providers", lambda device: ["CPUExecutionProvider"])

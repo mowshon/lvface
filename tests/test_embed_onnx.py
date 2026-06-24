@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from lvface import runtime
 from lvface.embed.onnx import LVFaceOnnxEmbedder, _resolve_providers
 
 
@@ -43,6 +44,51 @@ class FakeSession:
         return [np.ones((len(batch), 512), dtype=np.float32)]
 
 
+class FakeSessionOptions:
+    def __init__(self) -> None:
+        self.enable_mem_pattern = True
+        self.execution_mode: str | None = None
+
+
+class FakeExecutionMode:
+    ORT_SEQUENTIAL = "sequential"
+
+
+class FakeOrt:
+    def __init__(
+        self,
+        available: list[str],
+        factory: object | None = None,
+        preload_calls: list[dict[str, str]] | None = None,
+    ) -> None:
+        self.available = available
+        self.factory = factory
+        self.preload_calls = preload_calls
+        self.ExecutionMode = FakeExecutionMode
+        self.session_options: list[FakeSessionOptions] = []
+
+    def get_available_providers(self) -> list[str]:
+        return self.available
+
+    def preload_dlls(self, *, directory: str) -> None:
+        if self.preload_calls is not None:
+            self.preload_calls.append({"directory": directory})
+
+    def SessionOptions(self) -> FakeSessionOptions:
+        options = FakeSessionOptions()
+        self.session_options.append(options)
+        return options
+
+    def InferenceSession(self, path: str, **kwargs: object) -> FakeSession:
+        if self.factory is None:
+            raise AssertionError("session factory was not configured")
+        return self.factory(path, **kwargs)  # type: ignore[operator]
+
+
+def install_fake_ort(monkeypatch: pytest.MonkeyPatch, ort: FakeOrt) -> None:
+    monkeypatch.setattr(runtime, "_import_onnxruntime", lambda: ort)
+
+
 @pytest.mark.parametrize(
     ("device", "available", "expected"),
     [
@@ -61,22 +107,16 @@ def test_provider_resolution(
     available: list[str],
     expected: list[str],
 ) -> None:
-    monkeypatch.setattr(
-        "lvface.embed.onnx.onnxruntime.get_available_providers",
-        lambda: available,
-    )
+    install_fake_ort(monkeypatch, FakeOrt(available))
 
     assert _resolve_providers(device) == expected
 
 
-def test_cuda_request_warns_and_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "lvface.embed.onnx.onnxruntime.get_available_providers",
-        lambda: ["CPUExecutionProvider"],
-    )
+def test_cuda_request_requires_cuda_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_ort(monkeypatch, FakeOrt(["CPUExecutionProvider"]))
 
-    with pytest.warns(RuntimeWarning, match="unavailable"):
-        assert _resolve_providers("cuda") == ["CPUExecutionProvider"]
+    with pytest.raises(RuntimeError, match="CUDAExecutionProvider"):
+        _resolve_providers("cuda")
 
 
 def test_provider_resolution_rejects_invalid_device_or_missing_cpu(
@@ -84,10 +124,7 @@ def test_provider_resolution_rejects_invalid_device_or_missing_cpu(
 ) -> None:
     with pytest.raises(ValueError, match="device"):
         _resolve_providers("metal")
-    monkeypatch.setattr(
-        "lvface.embed.onnx.onnxruntime.get_available_providers",
-        lambda: ["CUDAExecutionProvider"],
-    )
+    install_fake_ort(monkeypatch, FakeOrt(["CUDAExecutionProvider"]))
     with pytest.raises(RuntimeError, match="CPUExecutionProvider"):
         _resolve_providers("auto")
 
@@ -96,16 +133,15 @@ def install_session_factory(
     monkeypatch: pytest.MonkeyPatch,
     session: FakeSession,
     calls: list[tuple[str, list[str]]],
+    available: list[str] | None = None,
 ) -> None:
-    def factory(path: str, *, providers: list[str]) -> FakeSession:
+    def factory(path: str, **kwargs: object) -> FakeSession:
+        providers = kwargs["providers"]
+        assert isinstance(providers, list)
         calls.append((path, providers))
         return session
 
-    monkeypatch.setattr("lvface.embed.onnx.onnxruntime.InferenceSession", factory)
-    monkeypatch.setattr(
-        "lvface.embed.onnx.onnxruntime.get_available_providers",
-        lambda: ["CPUExecutionProvider"],
-    )
+    install_fake_ort(monkeypatch, FakeOrt(available or ["CPUExecutionProvider"], factory))
 
 
 def test_load_is_lazy_idempotent_and_forward_uses_discovered_names(
@@ -128,6 +164,37 @@ def test_load_is_lazy_idempotent_and_forward_uses_discovered_names(
     names, feeds = session.runs[0]
     assert names == ["embedding"]
     assert list(feeds) == ["data"]
+
+
+def test_directml_session_uses_required_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_path = tmp_path / "model.onnx"
+    model_path.write_bytes(b"model")
+    session = FakeSession()
+    calls: list[tuple[str, list[str]]] = []
+    session_kwargs: list[dict[str, object]] = []
+
+    def factory(path: str, **kwargs: object) -> FakeSession:
+        providers = kwargs["providers"]
+        assert isinstance(providers, list)
+        calls.append((path, providers))
+        session_kwargs.append(kwargs)
+        return session
+
+    ort = FakeOrt(["DmlExecutionProvider", "CPUExecutionProvider"], factory)
+    install_fake_ort(monkeypatch, ort)
+
+    embedder = LVFaceOnnxEmbedder(model_path, device="directml")
+    embedder.load()
+    embedding = embedder.embed(np.zeros((112, 112, 3), dtype=np.uint8), normalize=False)
+
+    assert calls == [(str(model_path), ["DmlExecutionProvider", "CPUExecutionProvider"])]
+    assert session_kwargs[0]["sess_options"] is ort.session_options[0]
+    assert ort.session_options[0].enable_mem_pattern is False
+    assert ort.session_options[0].execution_mode == "sequential"
+    assert embedding.vector.shape == (512,)
 
 
 def test_fixed_batch_metadata_drives_padding(
@@ -262,18 +329,14 @@ def test_concurrent_load_builds_only_one_session(
     allow_finish = threading.Event()
     calls: list[int] = []
 
-    def factory(path: str, *, providers: list[str]) -> FakeSession:
-        del path, providers
+    def factory(path: str, **kwargs: object) -> FakeSession:
+        del path, kwargs
         calls.append(1)
         factory_started.set()
         assert allow_finish.wait(timeout=5)
         return FakeSession()
 
-    monkeypatch.setattr("lvface.embed.onnx.onnxruntime.InferenceSession", factory)
-    monkeypatch.setattr(
-        "lvface.embed.onnx.onnxruntime.get_available_providers",
-        lambda: ["CPUExecutionProvider"],
-    )
+    install_fake_ort(monkeypatch, FakeOrt(["CPUExecutionProvider"], factory))
     embedder = LVFaceOnnxEmbedder(model_path)
     threads = [threading.Thread(target=embedder.load) for _ in range(2)]
     threads[0].start()

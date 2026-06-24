@@ -184,9 +184,10 @@ def test_constructor_resolves_named_adapters_and_install_hints(
         return model_path
 
     monkeypatch.setattr(recognizer_module, "resolve_weights", resolve_weights)
-    named = FaceRecognizer("Tiny", detector=None, device="cpu")
+    named = FaceRecognizer("Tiny", detector=None, device="directml")
 
     assert named.embedder.model_path == model_path
+    assert named.embedder.device == "directml"
     assert resolved == ["Tiny"]
     with pytest.raises(TypeError, match="embedder"):
         FaceRecognizer(object(), detector=None)  # type: ignore[arg-type]

@@ -32,18 +32,38 @@ print(f"cosine={result.cosine:.4f}, display={result.percentage:.1f}%")
 
 ## Install
 
-Python 3.11 or newer is required.
+Python 3.11, 3.12, or 3.13 is required.
 
 ```bash
-# Recommended: recognition from ordinary photos + automatic weight download
-python -m pip install "lvface[detect,hub]"
+# Recommended CPU install: recognition from ordinary photos + automatic weight download
+python -m pip install "lvface[cpu,detect,hub]"
 
 # Local ONNX weights and already aligned 112×112 face crops
-python -m pip install lvface
+python -m pip install "lvface[cpu]"
 
 # Add guarded http(s) image loading
-python -m pip install "lvface[detect,hub,http]"
+python -m pip install "lvface[cpu,detect,hub,http]"
 ```
+
+Install exactly one ONNX Runtime backend per environment:
+
+```bash
+# CPU, any supported OS
+python -m pip install "lvface[cpu]"
+
+# NVIDIA CUDA on Linux or Windows
+python -m pip install "lvface[cuda]"
+
+# DirectML on Windows for DirectX 12-capable AMD, Intel, or NVIDIA GPUs
+python -m pip install "lvface[directml]"
+```
+
+Do not install `lvface[cpu]`, `lvface[cuda]`, and `lvface[directml]` into the same virtual
+environment. These backends provide the same `onnxruntime` import name; create a fresh
+environment when switching backend.
+
+Combine one backend with other feature extras as needed, for example
+`lvface[cuda,detect,hub]`.
 
 The `[detect]` extra installs the default InsightFace detector. The `[hub]` extra lets a
 registered model name download its pinned ONNX file on first construction:
@@ -91,14 +111,20 @@ LVFace model sizes: use the same weight file for enrollment, indexing, and queri
 Model resolution and download happen while `FaceRecognizer` is constructed. The ONNX Runtime
 session itself is still created lazily on the first embedding call.
 
-CPU is the supported runtime for the 0.1 release. There is no `[gpu]` extra because
-`onnxruntime` and `onnxruntime-gpu` provide the same Python package. For best-effort NVIDIA CUDA
-use on Linux or Windows, install all extras first, then replace the runtime:
+For NVIDIA CUDA installs, verify that ONNX Runtime sees the CUDA provider before benchmarking:
 
 ```bash
-python -m pip uninstall -y onnxruntime
-python -m pip install onnxruntime-gpu
+python - <<'PY'
+import onnxruntime as ort
+
+if hasattr(ort, "preload_dlls"):
+    ort.preload_dlls(directory="")
+print(ort.get_available_providers())
+PY
 ```
+
+Expected CUDA output includes `CUDAExecutionProvider`. Expected DirectML output on Windows
+includes `DmlExecutionProvider`.
 
 ## A 60-second tour
 

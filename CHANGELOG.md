@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Move ONNX Runtime backends to explicit `cpu`, `cuda`, and `directml` extras.
+- Add shared provider resolution, CUDA/cuDNN preload support, and DirectML session safeguards.
+- Keep `import lvface` safe without optional runtime, detector, or hub dependencies installed.
+
 ## 0.1.0
 
 - Initial ONNX-only LVFace embedding API for Python 3.11–3.13.
